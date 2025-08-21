@@ -144,8 +144,6 @@ const CashTracker = () => {
         {/* Header */}
         <div className="text-center space-y-2 animate-fade-in">
           <h1 className="text-4xl font-bold gradient-primary bg-clip-text text-transparent flex items-center justify-center gap-2">
-            <img src="/icon/icon.png" alt="DompetKu Icon" className="w-8 h-8" />
-            DompetKu
           </h1>
           <p className="text-muted-foreground">Kelola keuangan Anda dengan mudah</p>
         </div>
