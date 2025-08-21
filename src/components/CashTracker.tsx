@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Trash2, Edit, Plus, TrendingUp, TrendingDown, Wallet, CalendarIcon } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '../hooks/use-toast';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn } from '../lib/utils';
 
 interface Transaction {
   id: string;
@@ -143,8 +143,9 @@ const CashTracker = () => {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2 animate-fade-in">
-          <h1 className="text-4xl font-bold gradient-primary bg-clip-text text-transparent">
-            Penghitung Uang
+          <h1 className="text-4xl font-bold gradient-primary bg-clip-text text-transparent flex items-center justify-center gap-2">
+            <img src="/icon/icon.png" alt="DompetKu Icon" className="w-8 h-8" />
+            DompetKu
           </h1>
           <p className="text-muted-foreground">Kelola keuangan Anda dengan mudah</p>
         </div>
