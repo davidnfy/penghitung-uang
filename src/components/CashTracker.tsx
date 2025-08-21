@@ -144,8 +144,10 @@ const CashTracker = () => {
         {/* Header */}
         <div className="text-center space-y-2 animate-fade-in">
           <h1 className="text-4xl font-bold gradient-primary bg-clip-text text-transparent flex items-center justify-center gap-2">
+            <Wallet className="h-8 w-8" />
+            DompetKu
           </h1>
-          <p className="text-muted-foreground">Kelola keuangan Anda dengan mudah</p>
+          <h1>DompetKu</h1>
         </div>
 
         {/* Month Selector */}
