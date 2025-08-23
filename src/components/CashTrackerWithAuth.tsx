@@ -69,7 +69,7 @@ const CashTrackerWithAuth = () => {
         variant: "destructive"
       });
     } else {
-      setTransactions(data || []);
+      setTransactions((data || []).map(d => ({ ...d, type: d.type as 'income' | 'expense' })));
     }
     setLoading(false);
   };
