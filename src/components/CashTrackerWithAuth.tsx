@@ -1,298 +1,315 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Trash2, Edit, Plus, TrendingUp, TrendingDown, Wallet, CalendarIcon, LogOut, User } from 'lucide-react';
-import { useToast } from '../hooks/use-toast';
-import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
-import { format } from 'date-fns';
-import { cn } from '../lib/utils';
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useAuth } from '@/hooks/useAuth'
+import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase'
+import { Wallet, LogOut, Plus, TrendingUp, TrendingDown, Calendar, Edit, Trash2, Settings } from 'lucide-react'
+import ProfileEdit from './ProfileEdit'
+import Footer from './Footer'
 
 interface Transaction {
-  id: string;
-  user_id: string;
-  type: 'income' | 'expense';
-  amount: number;
-  description: string;
-  date: string;
-  month: string;
-  created_at: string;
+  id: string
+  user_id: string
+  type: 'income' | 'expense'
+  amount: number
+  description: string
+  date: string
+  month: string
+  created_at: string
 }
 
 const CashTrackerWithAuth = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
-  const [formData, setFormData] = useState({
-    type: 'income' as 'income' | 'expense',
-    amount: '',
-    description: '',
-    date: new Date()
-  });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
-  const { user, signOut } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
+  const [type, setType] = useState<'income' | 'expense'>('expense')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const { user, signOut } = useAuth()
+  const { toast } = useToast()
 
-  // Initialize with current month
   useEffect(() => {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    setSelectedMonth(currentMonth);
-  }, []);
+    const loadTransactions = async () => {
+      if (!user) return
 
-  // Load transactions when user is available
-  useEffect(() => {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Gagal memuat transaksi",
+          variant: "destructive"
+        })
+      } else {
+        setTransactions((data || []).map(d => ({ ...d, type: d.type as 'income' | 'expense' })))
+      }
+      setLoading(false)
+    }
+
     if (user) {
-      loadTransactions();
+      loadTransactions()
     }
-  }, [user]);
+  }, [user, toast])
 
-  const loadTransactions = async () => {
-    if (!user) return;
-    
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('date', { ascending: false });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Gagal memuat transaksi",
-        variant: "destructive"
-      });
-    } else {
-      setTransactions((data || []).map(d => ({ ...d, type: d.type as 'income' | 'expense' })));
-    }
-    setLoading(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.amount || !formData.description || !user) {
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!amount || !description || !user) {
       toast({
         title: "Error",
         description: "Mohon isi semua field",
         variant: "destructive"
-      });
-      return;
+      })
+      return
     }
 
-    setLoading(true);
-    const transactionDate = formData.date.toISOString().split('T')[0];
-    const transactionMonth = `${formData.date.getFullYear()}-${String(formData.date.getMonth() + 1).padStart(2, '0')}`;
-    
+    setLoading(true)
+    const today = new Date()
     const transactionData = {
       user_id: user.id,
-      type: formData.type,
-      amount: parseFloat(formData.amount),
-      description: formData.description,
-      date: transactionDate,
-      month: transactionMonth
-    };
-
-    let result;
-    if (editingId) {
-      result = await supabase
-        .from('transactions')
-        .update(transactionData)
-        .eq('id', editingId)
-        .eq('user_id', user.id);
-      setEditingId(null);
-    } else {
-      result = await supabase
-        .from('transactions')
-        .insert([transactionData]);
+      type,
+      amount: parseFloat(amount),
+      description,
+      date: today.toISOString().split('T')[0],
+      month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
     }
 
-    if (result.error) {
+    const { error } = await supabase
+      .from('transactions')
+      .insert([transactionData])
+
+    if (error) {
       toast({
         title: "Error",
-        description: result.error.message,
+        description: error.message,
         variant: "destructive"
-      });
+      })
     } else {
-      await loadTransactions();
-      setFormData({ type: 'income', amount: '', description: '', date: new Date() });
+      setAmount('')
+      setDescription('')
+      setType('expense')
+      
+      // Reload transactions
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+      
+      if (data) {
+        setTransactions(data.map(d => ({ ...d, type: d.type as 'income' | 'expense' })))
+      }
+
       toast({
         title: "Berhasil",
-        description: editingId ? "Transaksi berhasil diupdate" : "Transaksi berhasil ditambahkan"
-      });
+        description: "Transaksi berhasil ditambahkan"
+      })
     }
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
-  const handleEdit = (transaction: Transaction) => {
-    setFormData({
-      type: transaction.type,
-      amount: transaction.amount.toString(),
-      description: transaction.description,
-      date: new Date(transaction.date)
-    });
-    setEditingId(transaction.id);
-  };
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!amount || !description || !user || !editingId) return
 
-  const handleDelete = async (id: string) => {
-    if (!user) return;
-    
-    setLoading(true);
+    setLoading(true)
+    const today = new Date()
+    const transactionData = {
+      type,
+      amount: parseFloat(amount),
+      description,
+      date: today.toISOString().split('T')[0],
+      month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    }
+
+    const { error } = await supabase
+      .from('transactions')
+      .update(transactionData)
+      .eq('id', editingId)
+      .eq('user_id', user.id)
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      })
+    } else {
+      setAmount('')
+      setDescription('')
+      setType('expense')
+      setEditingId(null)
+      
+      // Reload transactions
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+      
+      if (data) {
+        setTransactions(data.map(d => ({ ...d, type: d.type as 'income' | 'expense' })))
+      }
+
+      toast({
+        title: "Berhasil",
+        description: "Transaksi berhasil diupdate"
+      })
+    }
+    setLoading(false)
+  }
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setAmount(transaction.amount.toString())
+    setDescription(transaction.description)
+    setType(transaction.type)
+    setEditingId(transaction.id)
+  }
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!user) return
+
+    setLoading(true)
     const { error } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id)
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
 
     if (error) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive"
-      });
+      })
     } else {
-      await loadTransactions();
+      setTransactions(transactions.filter(t => t.id !== id))
       toast({
         title: "Berhasil",
         description: "Transaksi berhasil dihapus"
-      });
+      })
     }
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
-  const handleLogout = async () => {
-    const { error } = await signOut();
+  const resetForm = () => {
+    setAmount('')
+    setDescription('')
+    setType('expense')
+    setEditingId(null)
+  }
+
+  const handleSignOut = async () => {
+    const { error } = await signOut()
     if (error) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive"
-      });
+      })
     }
-  };
+  }
 
-  const filteredTransactions = transactions.filter(t => t.month === selectedMonth);
-  const totalIncome = filteredTransactions
+  if (showProfile) {
+    return <ProfileEdit onBack={() => setShowProfile(false)} />
+  }
+
+  // Calculate totals
+  const totalIncome = transactions
     .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = filteredTransactions
+    .reduce((sum, t) => sum + t.amount, 0)
+  
+  const totalExpense = transactions
     .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const balance = totalIncome - totalExpense;
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR'
-    }).format(amount);
-  };
-
-  const months = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date(2025, i);
-    return {
-      value: `2025-${String(i + 1).padStart(2, '0')}`,
-      label: date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-    };
-  });
+    .reduce((sum, t) => sum + t.amount, 0)
+  
+  const balance = totalIncome - totalExpense
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header with logout */}
-        <div className="flex items-center justify-between animate-fade-in">
-          <div className="text-center space-y-2 flex-1">
-            <h1 className="text-4xl font-bold gradient-primary bg-clip-text text-transparent flex items-center justify-center gap-2">
-              <Wallet className="h-8 w-8" />
-              DompetKu
-            </h1>
-            <p className="text-muted-foreground">Kelola keuangan Anda dengan mudah</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <User className="h-4 w-4" />
-              {user?.email}
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 flex flex-col">
+      <div className="flex-1 p-4">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-8 w-8 text-primary" />
+              <div>
+                <h1 className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">DompetKu</h1>
+                <p className="text-muted-foreground">Selamat datang, {user?.email}</p>
+              </div>
             </div>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Keluar
-            </Button>
-          </div>
-        </div>
-
-        {/* Month Selector */}
-        <Card className="gradient-card animate-fade-in">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <Label htmlFor="month" className="font-medium">Pilih Bulan:</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Pilih bulan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map(month => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowProfile(true)} className="hidden sm:flex">
+                <Settings className="h-4 w-4 mr-2" />
+                Pengaturan
+              </Button>
+              <Button variant="outline" onClick={() => setShowProfile(true)} className="sm:hidden">
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2 hidden sm:block" />
+                <LogOut className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:block">Keluar</span>
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Summary Cards */}
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="gradient-card animate-fade-in border-income/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Pemasukan
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-income" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-income">
-                {formatCurrency(totalIncome)}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <Card className="gradient-card border-income/20">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Pemasukan
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-income" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl sm:text-2xl font-bold text-income">
+                  Rp {totalIncome.toLocaleString('id-ID')}
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="gradient-card animate-fade-in border-expense/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Pengeluaran
-              </CardTitle>
-              <TrendingDown className="h-4 w-4 text-expense" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-expense">
-                {formatCurrency(totalExpense)}
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="gradient-card border-expense/20">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Pengeluaran
+                </CardTitle>
+                <TrendingDown className="h-4 w-4 text-expense" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl sm:text-2xl font-bold text-expense">
+                  Rp {totalExpense.toLocaleString('id-ID')}
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="gradient-card animate-fade-in">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Saldo Akhir
-              </CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${balance >= 0 ? 'text-income' : 'text-expense'}`}>
-                {formatCurrency(balance)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="gradient-card sm:col-span-2 lg:col-span-1">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Saldo
+                </CardTitle>
+                <Wallet className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-xl sm:text-2xl font-bold ${balance >= 0 ? 'text-income' : 'text-expense'}`}>
+                  Rp {balance.toLocaleString('id-ID')}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Transaction Form */}
-          <Card className="gradient-card animate-slide-in">
+          {/* Add Transaction Form */}
+          <Card className="gradient-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
@@ -300,86 +317,49 @@ const CashTrackerWithAuth = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="type">Tipe Transaksi</Label>
-                  <Select 
-                    value={formData.type} 
-                    onValueChange={(value: 'income' | 'expense') => 
-                      setFormData({...formData, type: value})
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="income">Pemasukan</SelectItem>
-                      <SelectItem value="expense">Pengeluaran</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <form onSubmit={editingId ? handleUpdateTransaction : handleAddTransaction} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipe</Label>
+                    <Select value={type} onValueChange={(value: 'income' | 'expense') => setType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="income">Pemasukan</SelectItem>
+                        <SelectItem value="expense">Pengeluaran</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Jumlah (Rp)</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Keterangan</Label>
+                    <Input
+                      id="description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Contoh: Gaji, Makan, Transport"
+                    />
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Jumlah (Rp)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Keterangan</Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    placeholder="Contoh: Gaji, Makan, Transport"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Tanggal</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !formData.date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.date ? format(formData.date, "dd MMMM yyyy") : "Pilih tanggal"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={formData.date}
-                        onSelect={(date) => setFormData({...formData, date: date || new Date()})}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button type="submit" className="flex-1" disabled={loading}>
-                    {loading ? 'Memproses...' : editingId ? 'Update' : 'Tambah'} Transaksi
+                
+                <div className="sm:col-span-2 lg:col-span-3 flex flex-col sm:flex-row gap-2">
+                  <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">
+                    {editingId ? 'Update' : 'Tambah'}
                   </Button>
                   {editingId && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingId(null);
-                        setFormData({ type: 'income', amount: '', description: '', date: new Date() });
-                      }}
-                    >
+                    <Button type="button" variant="outline" onClick={resetForm} className="flex-1 sm:flex-none">
                       Batal
                     </Button>
                   )}
@@ -388,69 +368,67 @@ const CashTrackerWithAuth = () => {
             </CardContent>
           </Card>
 
-          {/* Transaction List */}
-          <Card className="gradient-card animate-slide-in">
+          {/* Recent Transactions */}
+          <Card className="gradient-card">
             <CardHeader>
-              <CardTitle>Daftar Transaksi</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Transaksi Terbaru
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {transactions.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  Memuat transaksi...
-                </p>
-              ) : filteredTransactions.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Belum ada transaksi untuk bulan ini
+                  Belum ada transaksi. Tambahkan transaksi pertama Anda!
                 </p>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {filteredTransactions.map((transaction) => (
+                <div className="space-y-4">
+                  {transactions.slice(0, 10).map((transaction) => (
                     <div
                       key={transaction.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${
-                        transaction.type === 'income' 
-                          ? 'border-l-income bg-income/5' 
-                          : 'border-l-expense bg-expense/5'
-                      } hover:shadow-md transition-shadow`}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors gap-3"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{transaction.description}</span>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            transaction.type === 'income' 
-                              ? 'bg-income text-income-foreground' 
-                              : 'bg-expense text-expense-foreground'
-                          }`}>
-                            {transaction.type === 'income' ? 'Masuk' : 'Keluar'}
-                          </span>
-                        </div>
-                        <div className={`font-semibold ${
-                          transaction.type === 'income' ? 'text-income' : 'text-expense'
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={`p-2 rounded-full flex-shrink-0 ${
+                          transaction.type === 'income' 
+                            ? 'bg-income/20 text-income' 
+                            : 'bg-expense/20 text-expense'
                         }`}>
-                          {formatCurrency(transaction.amount)}
+                          {transaction.type === 'income' ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4" />
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(transaction.date).toLocaleDateString('id-ID')}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{transaction.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(transaction.date).toLocaleDateString('id-ID')}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(transaction)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(transaction.id)}
-                          className="text-destructive hover:text-destructive"
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center justify-between sm:justify-end gap-2">
+                        <span className={`font-semibold ${
+                          transaction.type === 'income' ? 'text-income' : 'text-expense'
+                        }`}>
+                          {transaction.type === 'income' ? '+' : '-'}Rp {Number(transaction.amount).toLocaleString('id-ID')}
+                        </span>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditTransaction(transaction)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteTransaction(transaction.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -460,8 +438,9 @@ const CashTrackerWithAuth = () => {
           </Card>
         </div>
       </div>
+      <Footer />
     </div>
-  );
-};
+  )
+}
 
-export default CashTrackerWithAuth;
+export default CashTrackerWithAuth
